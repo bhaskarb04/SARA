@@ -36,7 +36,10 @@ public:
 	pointCloudViewer();
 	~pointCloudViewer();
 	void removeClouds();
+	void removeShapes();
 	void addPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr);
+	void addShape(osg::Node*);
+	void setHome(osg::Vec3d eye ,osg::Vec3d center ,osg::Vec3d up);
 };
 
 #endif

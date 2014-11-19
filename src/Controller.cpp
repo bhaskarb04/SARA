@@ -1,3 +1,6 @@
+#include <osg/ShapeDrawable>
+#include <osg/PolygonMode>
+
 #include "Controller.h"
 
 
@@ -8,6 +11,8 @@ Controller::Controller(void){
 	show_blocks_raw = false;
 	show_blocks_processed = false;
 	pclviewer = new pointCloudViewer;
+	_background = NULL;
+	_handmodel = NULL;
 }
 
 
@@ -124,8 +129,59 @@ void Controller::process(bool removebg,bool removemanip,bool show){
 		//Remove bg
 		if(removebg)
 			_background->removeBackground(cloud);
-		if(removemanip)
+		if(removemanip){
 			_handmodel->removeHand(cloud);
+			if(_handmodel->isHandPresent())
+				std::cout<<"Hand present"<<std::endl;
+			else
+				std::cout<<"Nothing present"<<std::endl;
+		}
+		////
+		pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGBA>);
+		tree->setInputCloud (cloud);
+
+		std::vector<pcl::PointIndices> cluster_indices;
+		pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> ec;
+		ec.setClusterTolerance (0.02);
+		ec.setMinClusterSize (1000);
+		ec.setMaxClusterSize (50000);
+		ec.setSearchMethod (tree);
+		ec.setInputCloud (cloud);
+		ec.extract (cluster_indices);
+		cout<<"Clusters: "<<cluster_indices.size()<<endl;
+		pclviewer->removeShapes();
+		for (std::vector<pcl::PointIndices>::const_iterator it = cluster_indices.begin (); it != cluster_indices.end (); ++it)
+		{
+			cout<<"Cluster size: "<<it->indices.size()<<endl;
+			pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZRGBA>);
+			for (std::vector<int>::const_iterator pit = it->indices.begin (); pit != it->indices.end (); pit++)
+				cloud_cluster->points.push_back (cloud->points[*pit]); //*
+			cloud_cluster->width = cloud_cluster->points.size ();
+			cloud_cluster->height = 1;
+			cloud_cluster->is_dense = true;
+			pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGBA> rgb(cloud_cluster);
+			//viewer->addPointCloud<pcl::PointXYZRGBA> (cloud_cluster, rgb, "sample cloud");
+			//pcl::io::savePCDFileBinary<pcl::PointXYZRGBA>(fname,*cloud_cluster);
+			pcl::PointXYZRGBA p1,p2,p3;
+			pcl::getMinMax3D(*cloud_cluster,p1,p2);
+			p3.x = (p1.x + p2.x)/2;
+			p3.y = (p1.y + p2.y)/2;
+			p3.z = (p1.z + p2.z)/2;
+			double rad = pcl::euclideanDistance(p1,p2)/2;
+			//viewer->addSphere(p3,rad);
+			osg::Sphere* sphere = new osg::Sphere(osg::Vec3d(p3.x,p3.y,p3.z),rad);
+			osg::ShapeDrawable* unitSphereDrawable = new osg::ShapeDrawable(sphere);
+			osg::Geode* sphereGeode = new osg::Geode();
+			sphereGeode->getOrCreateStateSet()->
+				setAttribute( new osg::PolygonMode(osg::PolygonMode::FRONT_AND_BACK,osg::PolygonMode::LINE) );
+			sphereGeode->addDrawable(unitSphereDrawable);
+			pclviewer->addShape(sphereGeode);
+		}
+
+		////
+		pclviewer->removeClouds();
+		pclviewer->addPointCloud(cloud);
+		pclviewer->frame();
 		//pcl::io::savePCDFileBinary<pcl::PointXYZRGBA>(fname2,*cloud);
 	}
 }

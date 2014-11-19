@@ -1,7 +1,12 @@
 #include "Background.h"
 
 #define DISTANCE_FROM_PLANE(a,b,c,d,x0,y0,z0) (a*x0+b*y0+c*z0+d)/sqrt(a*a+b*b+c*c)
-
+Background::Background(){
+	for(int i=0;i<NO_PLANES;i++){
+		pcl::ModelCoefficients::Ptr dummy(new pcl::ModelCoefficients);
+		coefficients.push_back(dummy);
+	}
+}
 Background::Background(bool forceRetrain, std::string path, int start, int end){
 	_path = path;
 	_start = start;
@@ -97,7 +102,8 @@ void Background::removeBackground(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud
 		seg.segment (*inliers, *(coefficients[i]));
 
 		extract.setIndices (inliers);
-		extract.filter (*cloud);
+		extract.filter(*cloud);
+		remove_noise(cloud,coefficients[i]);
 	}
 }
 
@@ -135,6 +141,24 @@ void Background::test_background(std::string path, int start, int end){
 		removeBackground(cloud);
 		std::cout<<filename<<": "<<float(cloud->size()) / cloudpoints<<std::endl;
 	}
+}
+
+void Background::remove_noise(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud,pcl::ModelCoefficients::Ptr coefficients){
+	static int count = 1;
+	for(pcl::PointCloud<pcl::PointXYZRGBA>::iterator it = cloud->begin();it!=cloud->end();it++){
+			double dist = abs(coefficients->values[0]*it->x +
+								coefficients->values[1]*it->y + 
+								coefficients->values[2]*it->z + 
+								coefficients->values[3])/
+								sqrt(coefficients->values[0]*coefficients->values[0] + 
+								coefficients->values[1]*coefficients->values[1] +
+								coefficients->values[2]*coefficients->values[2]);
+			if((count % 2 == 1 && dist < 0.01) || (count % 2 == 0 && dist < 0.1)){
+				cloud->erase(it);
+				it--;
+			}
+		}
+	count++;
 }
 
 

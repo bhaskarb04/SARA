@@ -170,14 +170,16 @@ void HandModel::load_model(){
 }
 
 void HandModel::removeHand(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud){
+	skincount = 0;
 	for(int i=0;i<model.size();i++){
 		for(pcl::PointCloud<pcl::PointXYZRGBA>::iterator it = cloud->begin();it!=cloud->end();it++){
 			double ssum = it->r+it->g+it->b;
 			if(model[i]->skincompare(it->r/ssum,it->g/ssum,it->b/ssum)){
+				skincount++;
 				cloud->erase(it);
 				it--;
-				break;
 			}
 		}
 	}
+	cout<<skincount<<endl;
 }

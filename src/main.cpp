@@ -1,7 +1,7 @@
 #pragma warning( disable : 4996 )
 #include "Controller.h"
 
-#define VISUALIZE_ONLY
+//#define VISUALIZE_ONLY
 
 void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
                         void* viewer_void)
@@ -15,6 +15,7 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
 
 void visualize_only(std::string base,int start, int end){
 	pointCloudViewer *pclviewer = new pointCloudViewer;
+	pclviewer->setHome(osg::Vec3d(-0.54,-0.38,-1.53),osg::Vec3d(-0.21,-0.15,-0.62),osg::Vec3d(-0.1,-0.9,0.27));
 #ifdef VISUALIZE_ONLY
 	//pcl::visualization::PCLVisualizer* viewer = new pcl::visualization::PCLVisualizer("Record show");
 	//viewer->setBackgroundColor (0, 0, 0);
@@ -24,6 +25,8 @@ void visualize_only(std::string base,int start, int end){
 	//file.open("../Data/info.data",std::ios_base::in);
 	skinfunction_1 skinmodel;
 	skinmodel.load_function();
+	HandModel handmodel;
+	Background background;
 	while (!pclviewer->done()){
 		for(int i=start;i<=end;i++){
 			int x;
@@ -37,14 +40,14 @@ void visualize_only(std::string base,int start, int end){
 			std::string fname2 = base+std::string("processed")+std::string(num);//+std::string("_Points.dat");
 
 			pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-		
-#ifndef VISUALIZE_ONLY		
 			if(pcl::io::loadPCDFile<pcl::PointXYZRGBA>(fname,*cloud) == -1){
 				std::cerr<<"Cannot load file"<<endl;
 				return;
 			}
-
-
+#ifndef VISUALIZE_ONLY		
+			
+			background.removeBackground(cloud);
+			//handmodel.removeHand(cloud);
 			for(pcl::PointCloud<pcl::PointXYZRGBA>::iterator it = cloud->begin();it!=cloud->end();it++){
 				double ssum = it->r+it->g+it->b;
 				if(skinmodel.skincompare(it->r/ssum,it->g/ssum,it->b/ssum)){
@@ -52,22 +55,25 @@ void visualize_only(std::string base,int start, int end){
 					it--;
 				}
 			}
-			pcl::io::savePCDFileBinary<pcl::PointXYZRGBA>(fname2,*cloud);
+			//pclviewer->removeClouds();
+			//pclviewer->addPointCloud(cloud);
+			//pclviewer->frame();
+			//pcl::io::savePCDFileBinary<pcl::PointXYZRGBA>(fname2,*cloud);
 #endif
 
 #ifdef VISUALIZE_ONLY
-			if(pcl::io::loadPCDFile<pcl::PointXYZRGBA>(fname,*cloud) == -1){
+			/*if(pcl::io::loadPCDFile<pcl::PointXYZRGBA>(fname,*cloud) == -1){
 				std::cerr<<"Cannot load file"<<endl;
 				return;
-			}
+			}*/
 			/*viewer->removeAllPointClouds();
 			viewer->addPointCloud(cloud);
 			viewer->spinOnce(100);*/
+#endif
 			pclviewer->removeClouds();
 			pclviewer->addPointCloud(cloud);
 			pclviewer->frame();
 			boost::this_thread::sleep (boost::posix_time::microseconds (100000));
-#endif
 		}
 	}
 }
@@ -85,9 +91,9 @@ int main (){
 	c.trainBackground();
 	c.trainManipulator();
 	c.process(true,true,false);
-	c.showImmediate("../Data/Full1/CloudRGBAll_PROCESSED",96,160);
+	//c.showImmediate("../Data/Full1/CloudRGBAll_PROCESSED",96,160);
 	return 0;
-	visualize_only("../Data/Full1/CloudRGBAll_",0,190);
+	visualize_only("../Data/Full1/CloudRGBAll_",96,160);
 	return 0;
 
 #ifdef RECORD

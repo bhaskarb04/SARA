@@ -15,6 +15,7 @@ pointCloudViewer::pointCloudViewer(){
 	this->setUpViewInWindow(10,10,800,600);
 	this->realize();
 	this->setCameraManipulator(new osgGA::TrackballManipulator);
+	this->setHome(osg::Vec3d(-0.54,-0.38,-1.53),osg::Vec3d(-0.21,-0.15,-0.62),osg::Vec3d(-0.1,-0.9,0.27));
 	
 }
 pointCloudViewer::~pointCloudViewer(){
@@ -22,6 +23,9 @@ pointCloudViewer::~pointCloudViewer(){
 }
 void pointCloudViewer::removeClouds(){
 	clouds->removeChildren(0,clouds->getNumChildren());
+}
+void pointCloudViewer::removeShapes(){
+	planes->removeChildren(0,planes->getNumChildren());
 }
 void pointCloudViewer::addPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pcldata){
 	osg::ref_ptr<osg::Geode> geode = new osg::Geode;
@@ -55,4 +59,15 @@ void pointCloudViewer::addPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr pcl
 	osg::StateSet* state = geometry->getOrCreateStateSet();
 	state->setMode( GL_LIGHTING,osg::StateAttribute::OFF);
 	clouds->addChild(geode);
+	//osg::Vec3d eye,center,up;
+	//this->getCameraManipulator()->getInverseMatrix().getLookAt(eye,center,up);
+}
+
+void pointCloudViewer::addShape(osg::Node* node){
+	planes->addChild(node);
+}
+
+void pointCloudViewer::setHome(osg::Vec3d eye ,osg::Vec3d center ,osg::Vec3d up){
+	this->getCameraManipulator()->setHomePosition(eye,center,up);
+	this->home();
 }

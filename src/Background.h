@@ -36,11 +36,13 @@ class Background
 	void save_background();
 	void load_background();
 	void test_background(std::string path, int start, int end);
+	void remove_noise(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud,pcl::ModelCoefficients::Ptr coefficients);
 public:
+	Background();
 	Background(bool forceRetrain, std::string path, int start, int end);
 	~Background(void);
 	void removeBackground(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud);
-	inline bool isTrained(){return trained;}
+	bool isTrained(){return trained;}
 };
 
 #endif
