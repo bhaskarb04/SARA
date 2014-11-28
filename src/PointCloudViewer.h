@@ -32,14 +32,23 @@ class pointCloudViewer : public osgViewer::Viewer{
 	osg::ref_ptr<osg::Group> root;
 	osg::ref_ptr<osg::PositionAttitudeTransform> clouds;
 	osg::ref_ptr<osg::PositionAttitudeTransform> planes;
+
 public:
 	pointCloudViewer();
 	~pointCloudViewer();
 	void removeClouds();
 	void removeShapes();
+	osg::ref_ptr<osg::Geode> convertPointCloudToGeode(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,osg::Vec4& coloravg);
+	osg::ref_ptr<osg::Geode> convertPointCloudToGeode(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud);
 	void addPointCloud(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr);
 	void addShape(osg::Node*);
 	void setHome(osg::Vec3d eye ,osg::Vec3d center ,osg::Vec3d up);
+	osg::BoundingBox getBoundingBoxFromCloud();
+
+	struct blockHypothesis{
+		osg::BoundingBox box;
+		osg::Vec4 color;
+	};
 };
 
 #endif

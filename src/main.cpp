@@ -1,7 +1,10 @@
 #pragma warning( disable : 4996 )
 #include "Controller.h"
+#include <pcl\registration\icp.h>
+#include <Eigen\src\Geometry\Transform.h>
+#include "myColorVisitor.h"
 
-//#define VISUALIZE_ONLY
+#define VISUALIZE_ONLY
 
 void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
                         void* viewer_void)
@@ -13,9 +16,128 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
   }
 }
 
+void convertGeodeToPCL(osg::Node* node, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, double scale = 1.0){
+	if(node->asGeode()){
+		osg::Geode* geode = node->asGeode();
+		for(int i=0;i < geode->getNumDrawables();i++){
+			osg::Geometry* geometry = geode->getDrawable(i)->asGeometry();
+			if(geometry){
+				osg::Vec3Array* vertexarray = (osg::Vec3Array*)geometry->getVertexArray();
+				for(int j =0;j < vertexarray->size();j++){
+					pcl::PointXYZRGBA mypt;
+					mypt.rgb = 0;
+					mypt.x = vertexarray->at(j).x()*scale;
+					mypt.y = vertexarray->at(j).y()*scale;
+					mypt.z = vertexarray->at(j).z()*scale;
+					cloud->push_back(mypt);
+				}
+			}
+		}
+	}
+}
+
+
+bool myfunction (pcl::PointIndices i,pcl::PointIndices j) { return (i.indices.size() > j.indices.size()); }
+
+std::vector<pointCloudViewer::blockHypothesis> boundingBoxes;
+void remove_box_points(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud){
+	if(!boundingBoxes.size())
+		return;
+	for(int i= 0; i < cloud->size();i++){
+		for(int j=0;j<boundingBoxes.size();j++){
+			std::vector<osg::Vec3f> points;
+			points.push_back(osg::Vec3f(cloud->at(i).x-0.02,cloud->at(i).y-0.02,cloud->at(i).z-0.02));
+			points.push_back(osg::Vec3f(cloud->at(i).x+0.02,cloud->at(i).y+0.02,cloud->at(i).z+0.02));
+			osg::BoundingBox bbpoint(points[0],points[1]);
+			uint32_t rgb_val_;
+			memcpy(&rgb_val_, &(cloud->points[i].rgb), sizeof(uint32_t));
+  
+			uint32_t red,green,blue;
+			blue=rgb_val_ & 0x000000ff;
+			rgb_val_ = rgb_val_ >> 8;
+			green=rgb_val_ & 0x000000ff;
+			rgb_val_ = rgb_val_ >> 8;
+			red=rgb_val_ & 0x000000ff;
+			
+			osg::Vec4 pointcolor = osg::Vec4f ((float)red/255.0f, (float)green/255.0f, (float)blue/255.0f,1.0f);
+			if(boundingBoxes[j].box.intersects(bbpoint) && (boundingBoxes[j].color - pointcolor).length2() < 0.05 ){
+				cloud->erase(cloud->begin() + i);
+				i--;
+				break;
+			}
+		}
+	}
+	//remove small noisy points
+	pcl::search::KdTree<pcl::PointXYZRGBA>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZRGBA>);
+	tree->setInputCloud (cloud);
+			
+	std::vector<pcl::PointIndices> cluster_indices;
+	pcl::EuclideanClusterExtraction<pcl::PointXYZRGBA> ec;
+	ec.setClusterTolerance (0.003);
+	ec.setMinClusterSize (100);
+	ec.setMaxClusterSize (cloud->size());
+	ec.setSearchMethod (tree);
+	ec.setInputCloud (cloud);
+	ec.extract (cluster_indices);
+	if(cluster_indices.size()){
+		std::sort(cluster_indices.begin(),cluster_indices.end(),myfunction);
+		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud_cluster (new pcl::PointCloud<pcl::PointXYZRGBA>);
+		for (std::vector<int>::const_iterator pit = cluster_indices.begin()->indices.begin (); 
+			pit != cluster_indices.begin()->indices.end (); pit++)
+			cloud_cluster->points.push_back (cloud->points[*pit]); //*
+		cloud_cluster->width = cloud_cluster->points.size ();
+		cloud_cluster->height = 1;
+		cloud_cluster->is_dense = true;
+		cloud->clear();
+		cloud = cloud_cluster;
+	}
+}
+
+osg::Quat find_rotation(osg::BoundingBox box, osg::Node* node){
+	
+	//osg::Vec3 a,b;
+	osg::Quat q;
+	//osg::BoundingBox boxnode;
+	double xmin = box.xMin() - box.center().x();
+	double xmax = box.xMax() - box.center().x();
+	double ymin = box.yMin() - box.center().y();
+	double ymax = box.yMax() - box.center().y();
+	double zmin = box.zMin() - box.center().z();
+	double zmax = box.zMax() - box.center().z();
+
+	double xdiff = box.xMax() - box.xMin();
+	double ydiff = box.yMax() - box.yMin();
+	double zdiff = box.zMax() - box.zMin();
+	
+	if( xdiff > ydiff && xdiff > zdiff){
+		q = osg::Quat();
+	}
+	if(ydiff > xdiff && ydiff > zdiff){
+		q = osg::Quat(osg::DegreesToRadians(-90.0),osg::Vec3(0,1,0));
+	}
+	//a = osg::Vec3(xmax-xmin,ymax-ymin,zmax-zmin);
+
+	//if(node->asGeode()){
+	//	boxnode = node->asGeode()->getBoundingBox();
+	//	b = osg::Vec3(boxnode.xMax() - boxnode.xMin(),boxnode.yMax() - boxnode.yMin(),boxnode.zMax() - boxnode.zMin());
+	//	osg::Vec3 v = a^b;
+	//	double s = v.length();
+	//	double c = a*b;
+	//	float data1[16] ={0,-v.z(),v.y(),0,v.z(),0,-v.x(),0,-v.y(),v.x(),0,0,0,0,0,1};
+	//	cv::Mat vx(4,4,CV_32FC1,data1);
+	//	cv::Mat rot = cv::Mat::eye(4,4,CV_32FC1) + vx + vx*vx*((1-c)/(s*s));
+	//	osg::Matrixd m((float*)rot.data);
+	//	
+	//	q = m.getRotate();
+	//}
+	return(q);
+
+}
+
 void visualize_only(std::string base,int start, int end){
+	std::vector<pcl::PointCloud<pcl::PointXYZRGBA>::Ptr> blocks;
 	pointCloudViewer *pclviewer = new pointCloudViewer;
-	pclviewer->setHome(osg::Vec3d(-0.54,-0.38,-1.53),osg::Vec3d(-0.21,-0.15,-0.62),osg::Vec3d(-0.1,-0.9,0.27));
+	//pclviewer->setHome(osg::Vec3d(-0.54,-0.38,-1.53),osg::Vec3d(-0.21,-0.15,-0.62),osg::Vec3d(-0.1,-0.9,0.27));
 #ifdef VISUALIZE_ONLY
 	//pcl::visualization::PCLVisualizer* viewer = new pcl::visualization::PCLVisualizer("Record show");
 	//viewer->setBackgroundColor (0, 0, 0);
@@ -27,22 +149,39 @@ void visualize_only(std::string base,int start, int end){
 	skinmodel.load_function();
 	HandModel handmodel;
 	Background background;
-	while (!pclviewer->done()){
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloudprev(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	int handcount = 0;
+	int prevhandcount = 0;
+	//while (!pclviewer->done()){
+		bool prevExists = false;
+		bool handPresent = false;
+		bool firsttime = true;
+		boundingBoxes.clear();
+		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr overallcloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+		//pclviewer->removeClouds();
 		for(int i=start;i<=end;i++){
 			int x;
 			//file>>x;
 			//if(!x)
 			//	continue;
-			cout<<i<<endl;
+			//cout<<i<<endl;
 			char num[5];
 			sprintf(num,"%03d",i);
-			std::string fname = base+std::string(num);//+std::string("_Points.dat");
+			std::string fname = base+std::string(num)+"_0";//+std::string("_Points.dat");
 			std::string fname2 = base+std::string("processed")+std::string(num);//+std::string("_Points.dat");
 
 			pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
-			if(pcl::io::loadPCDFile<pcl::PointXYZRGBA>(fname,*cloud) == -1){
-				std::cerr<<"Cannot load file"<<endl;
-				return;
+			if(QFile::exists(QString(fname.c_str()))){
+				if(pcl::io::loadPCDFile<pcl::PointXYZRGBA>(fname,*cloud) == -1){
+					std::cerr<<"Cannot load file"<<endl;
+					return;
+				}
+			}
+			else{
+				handPresent = true;
+				if(!firsttime)
+					handcount++;
+				continue;
 			}
 #ifndef VISUALIZE_ONLY		
 			
@@ -70,11 +209,94 @@ void visualize_only(std::string base,int start, int end){
 			viewer->addPointCloud(cloud);
 			viewer->spinOnce(100);*/
 #endif
-			pclviewer->removeClouds();
-			pclviewer->addPointCloud(cloud);
-			pclviewer->frame();
-			boost::this_thread::sleep (boost::posix_time::microseconds (100000));
+			if(!prevExists){
+				cloudprev = cloud;
+				//boundingBoxes.push_back(pclviewer->convertPointCloudToGeode(cloud)->getBoundingBox());
+				prevExists = true;
+			}
+			//else if(handPresent){
+				//pcl::IterativeClosestPoint<pcl::PointXYZRGBA, pcl::PointXYZRGBA> icp;
+				//icp.setInputCloud(cloudprev);
+				//icp.setInputTarget(cloud);
+				//pcl::PointCloud<pcl::PointXYZRGBA>::Ptr Final(new pcl::PointCloud<pcl::PointXYZRGBA>);
+				//icp.align(*Final);
+				//std::cout << "has converged:" << icp.hasConverged() << " score: " <<
+				//icp.getFitnessScore() << std::endl;
+				////Eigen::Transform t = icp.getFinalTransformation();
+				//std::cout << icp.getFinalTransformation() << std::endl;
+			if(handPresent && handcount){
+				pointCloudViewer::blockHypothesis bh;
+				bh.box = pclviewer->convertPointCloudToGeode(overallcloud,bh.color)->getBoundingBox();
+				boundingBoxes.push_back(bh);
+				pcl::PointCloud<pcl::PointXYZRGBA>::Ptr dummycloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+				for(int pp=0;pp<overallcloud->size();pp++)
+					dummycloud->push_back(overallcloud->at(pp));
+				blocks.push_back(dummycloud);
+				overallcloud->clear();
+				handPresent = false;
+			}
+				//handPresent = false;
+				remove_box_points(cloud);
+				for(int pcli = 0;pcli<cloud->size();pcli++)
+					overallcloud->push_back(cloud->at(pcli));
+				if(firsttime)
+					firsttime = false;
+				//cloudprev = cloud;
+				//pclviewer->removeClouds();
+				//pclviewer->addPointCloud(cloud);
+			//}
+			
+			//pclviewer->frame();
+			//boost::this_thread::sleep (boost::posix_time::microseconds (100000));
 		}
+		pointCloudViewer::blockHypothesis bh;
+		bh.box = pclviewer->convertPointCloudToGeode(overallcloud,bh.color)->getBoundingBox();
+		boundingBoxes.push_back(bh);
+		blocks.push_back(overallcloud);
+		//overallcloud->clear();
+	//}
+	
+	osg::Node* blockorig = osgDB::readNodeFile("../Data/Blue Lego Block.3DS");
+	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr block_cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
+	double scalevalue = boundingBoxes[0].box.radius() / blockorig->getBound().radius();
+	//convertGeodeToPCL(blockorig,block_cloud,scalevalue);
+
+	for(int i=0;i<boundingBoxes.size();i++){
+
+		//Initialization
+		myColorVisitor newColor;
+		newColor.setColor(boundingBoxes[i].color);
+		osg::PositionAttitudeTransform* pat = new osg::PositionAttitudeTransform;
+		osg::Node* block = osgDB::readNodeFile("../Data/Blue Lego Block.3DS");
+		//ICP method
+		/*pcl::IterativeClosestPoint<pcl::PointXYZRGBA, pcl::PointXYZRGBA> icp;
+		icp.setInputCloud(block_cloud);
+		icp.setInputTarget(blocks[i]);
+		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr Final(new pcl::PointCloud<pcl::PointXYZRGBA>);
+		icp.align(*Final);
+		std::cout << "has converged:" << icp.hasConverged() << " score: " <<
+		icp.getFitnessScore() << std::endl;
+		std::cout << icp.getFinalTransformation() << std::endl;*/
+		
+		pclviewer->addPointCloud(blocks[i]);
+		
+		//Set up the block to match with point cloud bounding box
+		//pat->setPosition(boundingBoxes[i].box.center());
+		//osg::Vec3 pos = pat->getPosition();
+		//pat->setPosition(osg::Vec3(pos.x(),-pos.y(),pos.z()));
+		//cout<<"Position: "<<pos.x()<< " "<<-pos.y()<<" "<<pos.z()<<endl;
+		//pat->setAttitude(find_rotation(boundingBoxes[i].box,block));
+		////find_rotation(boundingBoxes[i].box,block);
+		//
+		//pat->setScale(osg::Vec3d(scalevalue,scalevalue,scalevalue));
+		//
+		////Fix the color and add to scenegraph
+		//block->accept(newColor);
+		//pat->addChild(block);
+		//pclviewer->addShape(pat);
+	}
+	while(!pclviewer->done()){
+		pclviewer->frame();
 	}
 }
 
@@ -82,17 +304,17 @@ void visualize_only(std::string base,int start, int end){
 
 int main (){
 	
-	Controller c;
-	c.setPath("../Data/Full1/CloudRGBAll_",0,35,41,86,96,160);
+	//Controller c;
+	//c.setPath("../Data/Full1/CloudRGBAll_",0,35,41,86,96,160);
 	//c.showFull(true);
 	//c.startShow();
 	//c.showFullProcessed(true);
 	//c.startShow();
-	c.trainBackground();
-	c.trainManipulator();
-	c.process(true,true,false);
+	//c.trainBackground();
+	//c.trainManipulator();
+	//c.process(true,true,false);
 	//c.showImmediate("../Data/Full1/CloudRGBAll_PROCESSED",96,160);
-	return 0;
+	//return 0;
 	visualize_only("../Data/Full1/CloudRGBAll_",96,160);
 	return 0;
 
@@ -108,8 +330,8 @@ int main (){
 	for(int i=41;i<=86;i++){
 		char num[5];
 		sprintf(num,"%03d",i);
-		files.push_back(std::string("../Data/All/Hand/CloudRGBAll_SkinPoints_")+std::string(num));
+		files.push_back(std::string("../Data/Full1/CloudRGBAll_SkinPoints_")+std::string(num));
 	}
-	HandModel hm(files);
-	hm.save_model();*/
+	HandModel hm(files);*/
+	//hm.save_model();
 }

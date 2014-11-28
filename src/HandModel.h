@@ -44,7 +44,7 @@ public:
 	void load_model();
 	void removeHand(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud);
 	bool isTrained(){return trained;}
-	bool isHandPresent(){return (skincount > 1000);}
+	bool isHandPresent(){return (skincount > 20000);}
 };
 
 #endif

@@ -47,6 +47,7 @@ public:
 	bool skincompare(float r, float g, float b);
 	void save_function();
 	void load_function();
+	void skinhistogram(vector<cv::Point3f> skinvalues);
 };
 
 class skinfunction_2: public skinfunction{

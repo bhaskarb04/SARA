@@ -147,6 +147,7 @@ HandModel::HandModel(vector<std::string> filelist){
 	}
 	
 	skinfunction_1 *sf1 = new skinfunction_1;
+	//sf1->skinhistogram(skinvals);
 	sf1->skintrain(skinvals);
 	model.push_back(sf1);
 	/*skinfunction_2 *sf2 = new skinfunction_2;
