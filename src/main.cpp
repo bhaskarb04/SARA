@@ -2,6 +2,7 @@
 #include "Controller.h"
 #include <pcl\registration\icp.h>
 #include <Eigen\src\Geometry\Transform.h>
+#include <osg/LineWidth>
 #include "myColorVisitor.h"
 
 #define VISUALIZE_ONLY
@@ -14,6 +15,49 @@ void keyboardEventOccurred (const pcl::visualization::KeyboardEvent &event,
   {
     std::cout << "r was pressed => removing all text" << std::endl;
   }
+}
+
+osg::Geode* createAxis(const osg::Vec3& corner,const osg::Vec3& xdir,const osg::Vec3& ydir,const osg::Vec3& zdir)
+{
+    // set up the Geometry.
+	osg::Geode* geode = new osg::Geode;
+    osg::Geometry* geom = new osg::Geometry;
+
+    osg::Vec3Array* coords = new osg::Vec3Array(6);
+    (*coords)[0] = corner;
+    (*coords)[1] = corner+xdir;
+    (*coords)[2] = corner;
+    (*coords)[3] = corner+ydir;
+    (*coords)[4] = corner;
+    (*coords)[5] = corner+zdir;
+
+    geom->setVertexArray(coords);
+
+    osg::Vec4 x_color(1.0f,0.0f,0.0f,1.0f);
+    osg::Vec4 y_color(0.0f,1.0f,0.0f,1.0f);
+    osg::Vec4 z_color(0.0f,0.0f,1.0f,1.0f);
+
+    osg::Vec4Array* color = new osg::Vec4Array(6);
+    (*color)[0] = x_color;
+    (*color)[1] = x_color;
+    (*color)[2] = y_color;
+    (*color)[3] = y_color;
+    (*color)[4] = z_color;
+    (*color)[5] = z_color;
+
+    geom->setColorArray(color);
+	geom->setColorBinding( osg::Geometry::BIND_PER_VERTEX);
+
+    geom->addPrimitiveSet(new osg::DrawArrays(osg::PrimitiveSet::LINES,0,6));
+
+    osg::StateSet* stateset = new osg::StateSet;
+    osg::LineWidth* linewidth = new osg::LineWidth();
+    linewidth->setWidth(4.0f);
+    stateset->setAttributeAndModes(linewidth,osg::StateAttribute::ON);
+    stateset->setMode(GL_LIGHTING,osg::StateAttribute::OFF);
+    geom->setStateSet(stateset);
+	geode->addDrawable(geom);
+    return geode;
 }
 
 void convertGeodeToPCL(osg::Node* node, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud, double scale = 1.0){
@@ -40,6 +84,20 @@ void convertGeodeToPCL(osg::Node* node, pcl::PointCloud<pcl::PointXYZRGBA>::Ptr&
 bool myfunction (pcl::PointIndices i,pcl::PointIndices j) { return (i.indices.size() > j.indices.size()); }
 
 std::vector<pointCloudViewer::blockHypothesis> boundingBoxes;
+
+void fixBoundingBoxes(){
+	double gz = boundingBoxes[0].box.zMax();
+	for(int i=0;i<boundingBoxes.size();i++){
+		osg::BoundingBox* box = &boundingBoxes[i].box;
+		double zmin = box->zMin(); + (zmin-gz);
+		double xmin = box->xMin();// + (zmin-gz);
+		double ymin = box->yMin() - (zmin-gz)*0.5;
+		double xmax = box->xMax();// + (zmin-gz);
+		double ymax = box->yMax() - (zmin-gz)*0.5;
+		double zmax = box->zMax(); + (zmin-gz);
+		box->set(xmin,ymin,zmin,xmax,ymax,zmax);
+	}
+}
 void remove_box_points(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud){
 	if(!boundingBoxes.size())
 		return;
@@ -109,11 +167,14 @@ osg::Quat find_rotation(osg::BoundingBox box, osg::Node* node){
 	double ydiff = box.yMax() - box.yMin();
 	double zdiff = box.zMax() - box.zMin();
 	
-	if( xdiff > ydiff && xdiff > zdiff){
+	if( xdiff > ydiff){
 		q = osg::Quat();
 	}
-	if(ydiff > xdiff && ydiff > zdiff){
-		q = osg::Quat(osg::DegreesToRadians(-90.0),osg::Vec3(0,1,0));
+	if(ydiff > xdiff ){
+		if(box.xMin() < 0)
+			q = osg::Quat(osg::DegreesToRadians(90.0),osg::Vec3(0,1,0));//*osg::Quat(osg::DegreesToRadians(180.0),osg::Vec3(0,1,0));
+		else
+			q = osg::Quat(osg::DegreesToRadians(90.0),osg::Vec3(0,1,0));//*osg::Quat(osg::DegreesToRadians(180.0),osg::Vec3(0,1,0));
 	}
 	//a = osg::Vec3(xmax-xmin,ymax-ymin,zmax-zmin);
 
@@ -260,7 +321,7 @@ void visualize_only(std::string base,int start, int end){
 	pcl::PointCloud<pcl::PointXYZRGBA>::Ptr block_cloud(new pcl::PointCloud<pcl::PointXYZRGBA>);
 	double scalevalue = boundingBoxes[0].box.radius() / blockorig->getBound().radius();
 	//convertGeodeToPCL(blockorig,block_cloud,scalevalue);
-
+	fixBoundingBoxes();
 	for(int i=0;i<boundingBoxes.size();i++){
 
 		//Initialization
@@ -270,7 +331,7 @@ void visualize_only(std::string base,int start, int end){
 		osg::Node* block = osgDB::readNodeFile("../Data/Blue Lego Block.3DS");
 		//ICP method
 		/*pcl::IterativeClosestPoint<pcl::PointXYZRGBA, pcl::PointXYZRGBA> icp;
-		icp.setInputCloud(block_cloud);
+		icp.setInputCloud(blocks[0]);
 		icp.setInputTarget(blocks[i]);
 		pcl::PointCloud<pcl::PointXYZRGBA>::Ptr Final(new pcl::PointCloud<pcl::PointXYZRGBA>);
 		icp.align(*Final);
@@ -278,23 +339,39 @@ void visualize_only(std::string base,int start, int end){
 		icp.getFitnessScore() << std::endl;
 		std::cout << icp.getFinalTransformation() << std::endl;*/
 		
-		pclviewer->addPointCloud(blocks[i]);
-		
+		//pclviewer->addPointCloud(blocks[i]);
+		/*cout<<boundingBoxes[i].box.xMax()<<" "<<boundingBoxes[i].box.xMin()<<" "<<
+			  boundingBoxes[i].box.yMax()<<" "<<boundingBoxes[i].box.yMin()<<" "<<
+			  boundingBoxes[i].box.zMax()<<" "<<boundingBoxes[i].box.zMin()<<endl;*/
+
 		//Set up the block to match with point cloud bounding box
-		//pat->setPosition(boundingBoxes[i].box.center());
-		//osg::Vec3 pos = pat->getPosition();
-		//pat->setPosition(osg::Vec3(pos.x(),-pos.y(),pos.z()));
-		//cout<<"Position: "<<pos.x()<< " "<<-pos.y()<<" "<<pos.z()<<endl;
+		
+		
+		pat->setPosition(boundingBoxes[i].box.center() - boundingBoxes[0].box.center());
+		osg::Vec3d pos = pat->getPosition();
+		pat->setPosition(osg::Vec3(pos.x(),-pos.z(),boundingBoxes[i].box.yMax()));
+		cout<<"Position: "<<pos.x()<< " "<<-pos.z()<<" "<<boundingBoxes[i].box.yMax()<<endl;
+		pat->setPivotPoint(boundingBoxes[i].box.corner(7));
+		osg::Vec3d pivotpos = pat->getPivotPoint();
+		cout<<"Pivot Position: "<<pivotpos.x()<< " "<<pivotpos.y()<<" "<<pivotpos.z()<<endl;
 		//pat->setAttitude(find_rotation(boundingBoxes[i].box,block));
-		////find_rotation(boundingBoxes[i].box,block);
-		//
-		//pat->setScale(osg::Vec3d(scalevalue,scalevalue,scalevalue));
-		//
+		//find_rotation(boundingBoxes[i].box,block);
+		if(i == 1){
+			pat->setAttitude(osg::Quat(osg::DegreesToRadians(-90.0),osg::Vec3(0,1,0))*
+							osg::Quat(osg::DegreesToRadians(0.0),osg::Vec3(0,0,1))*
+							osg::Quat(osg::DegreesToRadians(0.0),osg::Vec3(1,0,0))
+			);
+			pos = pat->getPosition();
+			pat->setPosition(osg::Vec3(pos.x(),pos.y(),pos.z()-0.08));
+		}
+		pat->setScale(osg::Vec3d(scalevalue,scalevalue,scalevalue));
+		
 		////Fix the color and add to scenegraph
-		//block->accept(newColor);
-		//pat->addChild(block);
-		//pclviewer->addShape(pat);
+		block->accept(newColor);
+		pat->addChild(block);
+		pclviewer->addShape(pat);
 	}
+	pclviewer->addShape(createAxis(osg::Vec3(0,0,0),osg::Vec3(1,0,0),osg::Vec3(0,1,0),osg::Vec3(0,0,1)));
 	while(!pclviewer->done()){
 		pclviewer->frame();
 	}
