@@ -31,20 +31,22 @@ class HandModel
 	bool trained;
 	vector<skinfunction*> model;
 	int skincount;
-
-	pcl::ModelCoefficients::Ptr removeplane(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud);
-	void remove_noise(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::ModelCoefficients::Ptr coefficients);
-	
 public:
+	
 	HandModel(std::string base,int start, int end,bool show);
 	HandModel(vector<std::string> filelist);
 	HandModel();
 	~HandModel(void);
+	
 	void save_model();
 	void load_model();
 	void removeHand(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr& cloud);
 	bool isTrained(){return trained;}
 	bool isHandPresent(){return (skincount > 20000);}
+	
+	pcl::ModelCoefficients::Ptr removeplane(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr &cloud);
+	void remove_noise(pcl::PointCloud<pcl::PointXYZRGBA>::Ptr cloud,pcl::ModelCoefficients::Ptr coefficients);
+	
 };
 
 #endif

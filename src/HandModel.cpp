@@ -105,12 +105,12 @@ pcl::ModelCoefficients::Ptr HandModel::removeplane(pcl::PointCloud<pcl::PointXYZ
 											<< coefficients->values[3] << std::endl;
 	}*/
 
-	pcl::ExtractIndices<pcl::PointXYZRGBA> extract;
-	// Extract the inliers
-	extract.setInputCloud (cloud);
-	extract.setIndices (inliers);
-	extract.setNegative (true);
-	extract.filter (*cloud);
+	//pcl::ExtractIndices<pcl::PointXYZRGBA> extract;
+	//// Extract the inliers
+	//extract.setInputCloud (cloud);
+	//extract.setIndices (inliers);
+	//extract.setNegative (true);
+	//extract.filter (*cloud);
 
 	return (coefficients);
 }

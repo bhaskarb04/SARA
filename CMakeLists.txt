@@ -63,7 +63,12 @@ SET(SOURCES
 	${SRC_DIR}/Background.cpp
 	${SRC_DIR}/Controller.cpp
 	${SRC_DIR}/skinfunction.cpp
-
+	${SRC_DIR}/ARVideoCapture.cpp
+	${SRC_DIR}/myColorVisitor.cpp
+	${SRC_DIR}/GLSL_ShaderLoader.cpp
+	${SRC_DIR}/HCI571X-VideoRenderer.cpp
+	${SRC_DIR}/imgprocesscallback.cpp
+	${SRC_DIR}/VideoTexCallback.cpp
 
 	${SRC_DIR}/Recorder.h
 	${SRC_DIR}/Analyzer.h
@@ -72,9 +77,17 @@ SET(SOURCES
 	${SRC_DIR}/Background.h
 	${SRC_DIR}/Controller.h
 	${SRC_DIR}/skinfunction.h
-	
-	
+	${SRC_DIR}/ARVideoCapture.h
+	${SRC_DIR}/myColorVisitor.h
+	${SRC_DIR}/GLSL_ShaderLoader.h
+	${SRC_DIR}/imgprocesscallback.h
+	${SRC_DIR}/VideoTexCallback.h
 )
+
+SET (SHADERS
+	${SRC_DIR}/shader/videobg.vs
+	${SRC_DIR}/shader/videobg.fs
+	)
 
 SET(UIS
 	
@@ -97,6 +110,7 @@ ADD_EXECUTABLE(${PROJECT_NAME}
 	${HEADERS}
 	${UIS}
 	${MOCS}
+	${SHADERS}
 	)
 
 

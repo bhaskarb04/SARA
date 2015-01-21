@@ -20,9 +20,9 @@
 #include <pcl\kdtree\kdtree.h>
 #include <pcl\segmentation\extract_clusters.h>
 
-#include <opencv\highgui.h>
-#include <opencv\cv.h>
-#include <opencv\ml.h>
+#include <opencv2\highgui.hpp>
+#include <opencv2\opencv.hpp>
+#include <opencv2\ml.hpp>
 
 
 class skinfunction{
@@ -50,11 +50,11 @@ public:
 	void skinhistogram(vector<cv::Point3f> skinvalues);
 };
 
-class skinfunction_2: public skinfunction{
-	cv::EM *gmm;
-public:
-	void skintrain(vector<cv::Point3f> skinvalues);
-	bool skincompare(float r, float g, float b);
-	void save_function();
-	void load_function();
-};
+//class skinfunction_2: public skinfunction{
+//	cv:: *gmm;
+//public:
+//	void skintrain(vector<cv::Point3f> skinvalues);
+//	bool skincompare(float r, float g, float b);
+//	void save_function();
+//	void load_function();
+//};

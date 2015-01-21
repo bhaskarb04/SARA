@@ -4,6 +4,13 @@
 #include <Eigen\src\Geometry\Transform.h>
 #include <osg/LineWidth>
 #include "myColorVisitor.h"
+#include "Recorder.h"
+
+#include "opencv2/videoio/videoio.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/imgproc/imgproc.hpp"
+
+#include <iostream>
 
 #define VISUALIZE_ONLY
 
@@ -89,12 +96,17 @@ void fixBoundingBoxes(){
 	double gz = boundingBoxes[0].box.zMax();
 	for(int i=0;i<boundingBoxes.size();i++){
 		osg::BoundingBox* box = &boundingBoxes[i].box;
-		double zmin = box->zMin(); + (zmin-gz);
+		double zmin = box->zMin();
 		double xmin = box->xMin();// + (zmin-gz);
 		double ymin = box->yMin() - (zmin-gz)*0.5;
 		double xmax = box->xMax();// + (zmin-gz);
 		double ymax = box->yMax() - (zmin-gz)*0.5;
-		double zmax = box->zMax(); + (zmin-gz);
+		double zmax = box->zMax();
+
+		if(i!=0){
+			zmin = boundingBoxes[i-1].box.zMin() - boundingBoxes[0].box.radius();
+			zmax = boundingBoxes[i-1].box.zMax() - boundingBoxes[0].box.radius();
+		}
 		box->set(xmin,ymin,zmin,xmax,ymax,zmax);
 	}
 }
@@ -379,7 +391,7 @@ void visualize_only(std::string base,int start, int end){
 
 
 
-int main (){
+int notmain (){
 	
 	//Controller c;
 	//c.setPath("../Data/Full1/CloudRGBAll_",0,35,41,86,96,160);
@@ -392,7 +404,77 @@ int main (){
 	//c.process(true,true,false);
 	//c.showImmediate("../Data/Full1/CloudRGBAll_PROCESSED",96,160);
 	//return 0;
-	visualize_only("../Data/Full1/CloudRGBAll_",96,160);
+	//visualize_only("../Data/Full1/CloudRGBAll_",96,160);
+
+	bool isColorizeDisp, isFixedMaxDisp;
+    int imageMode;
+    bool retrievedImageFlags[5];
+    string filename;
+    bool isVideoReading;
+
+    cout << "Device opening ..." << endl;
+    cv::VideoCapture capture;
+    capture.open( cv::CAP_OPENNI2 );
+    if( !capture.isOpened() )
+        capture.open( cv::CAP_OPENNI );
+
+    cout << "done." << endl;
+
+    if( !capture.isOpened() )
+    {
+        cout << "Can not open a capture object." << endl;
+        return -1;
+	}
+
+    // Print some avalible device settings.
+    cout << "\nDepth generator output mode:" << endl <<
+            "FRAME_WIDTH      " << capture.get( cv::CAP_PROP_FRAME_WIDTH ) << endl <<
+            "FRAME_HEIGHT     " << capture.get( cv::CAP_PROP_FRAME_HEIGHT ) << endl <<
+            "FRAME_MAX_DEPTH  " << capture.get( cv::CAP_PROP_OPENNI_FRAME_MAX_DEPTH ) << " mm" << endl <<
+            "FPS              " << capture.get( cv::CAP_PROP_FPS ) << endl <<
+            "REGISTRATION     " << capture.get( cv::CAP_PROP_OPENNI_REGISTRATION ) << endl;
+    if( capture.get( cv::CAP_OPENNI_IMAGE_GENERATOR_PRESENT ) )
+    {
+        cout <<
+            "\nImage generator output mode:" << endl <<
+            "FRAME_WIDTH   " << capture.get( cv::CAP_OPENNI_IMAGE_GENERATOR+cv::CAP_PROP_FRAME_WIDTH ) << endl <<
+            "FRAME_HEIGHT  " << capture.get( cv::CAP_OPENNI_IMAGE_GENERATOR+cv::CAP_PROP_FRAME_HEIGHT ) << endl <<
+            "FPS           " << capture.get( cv::CAP_OPENNI_IMAGE_GENERATOR+cv::CAP_PROP_FPS ) << endl;
+    }
+
+    for(;;)
+    {
+        cv::Mat depthMap;
+        cv::Mat validDepthMap;
+        cv::Mat disparityMap;
+        cv::Mat bgrImage;
+        cv::Mat grayImage;
+
+        if( !capture.grab() )
+        {
+            cout << "Can not grab images." << endl;
+            return -1;
+        }
+        else
+        {
+ /*           if( capture.retrieve( depthMap, cv::CAP_OPENNI_DEPTH_MAP ) )
+            {
+                const float scaleFactor = 0.05f;
+                cv::Mat show; depthMap.convertTo( show, CV_8UC1, scaleFactor );
+                cv::imshow( "depth map", show );
+            }
+*/
+            if( capture.retrieve( validDepthMap, cv::CAP_OPENNI_VALID_DEPTH_MASK ) )
+                cv::imshow( "valid depth mask", validDepthMap );
+
+//			if( capture.retrieve( bgrImage, cv::CAP_OPENNI_BGR_IMAGE ) )
+ //               cv::imshow( "rgb image", bgrImage );
+        }
+
+        if( cv::waitKey( 30 ) >= 0 )
+            break;
+    }
+
 	return 0;
 
 #ifdef RECORD
